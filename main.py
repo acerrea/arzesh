@@ -14,40 +14,42 @@ import os
 # بخش تنظیمات و توابع مشترک
 # ===============================================================
 
-# --- خواندن توکن‌ها از GitHub Secrets ---
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-# --- تنظیمات فونت ---
 try:
     font_path = "Vazirmatn-FD-ExtraBold.ttf"
-    # بررسی وجود فایل فونت
     if not os.path.exists(font_path):
         raise FileNotFoundError
     font_prop = fm.FontProperties(fname=font_path)
     print("فونت Vazirmatn با موفقیت بارگذاری شد.")
 except FileNotFoundError:
     print("هشدار: فایل فونت 'Vazirmatn-FD-ExtraBold.ttf' یافت نشد. از فونت پیش‌فرض استفاده می‌شود.")
-    font_prop = fm.FontProperties() # استفاده از فونت پیش‌فرض در صورت عدم وجود فایل
+    font_prop = fm.FontProperties()
 
 # --- توابع کمکی ---
 def reshape_text(text):
-    """آماده‌سازی متن فارسی برای نمایش در نمودار."""
     reshaped_text = arabic_reshaper.reshape(text)
     return get_display(reshaped_text)
 
+# <<< تابع جدید برای تبدیل اعداد به فارسی >>>
+def to_persian_digits(text):
+    """رشته‌ای که حاوی اعداد انگلیسی است را به اعداد فارسی تبدیل می‌کند."""
+    english_digits = "0123456789"
+    persian_digits = "۰۱۲۳۴۵۶۷۸۹"
+    translation_table = str.maketrans(english_digits, persian_digits)
+    return str(text).translate(translation_table)
+
+# <<< اصلاح تابع فرمت‌دهی محورها برای استفاده از اعداد فارسی >>>
 def thousands_formatter(x, pos):
-    """فرمت‌دهی اعداد به صورت هزارگان جدا شده."""
-    return f'{int(x):,}'
+    """اعداد را با جداکننده هزارگان فرمت کرده و به فارسی تبدیل می‌کند."""
+    formatted_number = f'{int(x):,}'
+    return to_persian_digits(formatted_number)
 
 # ===============================================================
 # تابع ۱: تولید نمودارهای بازار آپشن
 # ===============================================================
 def generate_options_plots():
-    """
-    داده‌های بازار آپشن را دریافت کرده، دو نمودار مورد نیاز را تولید و
-    نام فایل‌های آن‌ها را برمی‌گرداند.
-    """
     print("\n--- شروع فرآیند تولید نمودارهای بازار آپشن ---")
     URL = 'https://tradersarena.ir/options-arena/history'
     NOW = datetime.now()
@@ -57,7 +59,6 @@ def generate_options_plots():
     generated_files = []
 
     try:
-        # --- دریافت و پردازش داده‌ها ---
         print(f"در حال دریافت داده از: {URL}")
         response = requests.get(URL, timeout=30)
         response.raise_for_status()
@@ -76,7 +77,7 @@ def generate_options_plots():
                 kol = float(cols[2].text.replace(' B', '').replace(',', '').strip())
                 ekhtyar_kharyd = float(cols[8].text.replace(' B', '').replace(',', '').strip())
                 ekhtyar_forosh = float(cols[14].text.replace(' B', '').replace(',', '').strip())
-                if all(v != 0 for v in [kol, ekhtyar_kharyd, ekhtyar_forosh]):
+                if all(v is not None and v != 0 for v in [kol, ekhtyar_kharyd, ekhtyar_forosh]):
                     data.append({
                         "تاریخ": tarikh, 'ارزش معاملات کل': kol,
                         'ارزش معاملات اختیار خرید': ekhtyar_kharyd, 'ارزش معاملات اختیار فروش': ekhtyar_forosh
@@ -85,7 +86,7 @@ def generate_options_plots():
         if not data:
             print("داده‌ای برای پردازش در بازار آپشن وجود ندارد.")
             return []
-
+        
         df = pd.DataFrame(data)
         df_reversed = df.iloc[::-1].reset_index(drop=True)
         df_reversed['MA_5_kol'] = df_reversed['ارزش معاملات کل'].rolling(window=5).mean()
@@ -94,21 +95,28 @@ def generate_options_plots():
         df = pd.merge(df, df_reversed.iloc[::-1], on='تاریخ', how='left', suffixes=('', '_y'))
         df = df.loc[:,~df.columns.str.endswith('_y')]
 
-        # --- نمودار ۱: ارزش معاملات کل، خرید و فروش (خواسته شما) ---
+        # --- نمودار ۱: نمای کلی معاملات آپشن ---
         fig1, (ax0, ax1, ax2) = plt.subplots(3, 1, figsize=(23, 12.5), sharex=True)
-        fig1.suptitle(reshape_text(f"گزارش ارزش معاملات اختیار | بروزرسانی: {NOW_STR}"), fontsize=18, fontproperties=font_prop, y=0.98, color='#003366')
+        fig1.suptitle(reshape_text(f"گزارش ارزش معاملات اختیار خرید و فروش | بروزرسانی: {to_persian_digits(NOW_STR)}"), fontsize=18, fontproperties=font_prop, y=0.98, color='#003366')
         
+        last_date_option = to_persian_digits(df["تاریخ"].iloc[0])
         # Subplot 0: Total
+        last_val_total = to_persian_digits(f'{df["ارزش معاملات کل"].iloc[0]:,.0f}')
+        title0 = f'نمودار ارزش معاملات کل اختیارها | آخرین مقدار ({last_date_option}): {last_val_total} میلیارد تومان'
         ax0.plot(df['تاریخ'], df['ارزش معاملات کل'], label=reshape_text('ارزش معاملات کل'), color='#000000', marker='.', linewidth=1.5)
-        ax0.set_title(reshape_text(f'نمودار ارزش معاملات کل | آخرین مقدار: {df["ارزش معاملات کل"].iloc[0]:,.0f} م.ت'), fontproperties=font_prop, fontsize=14)
+        ax0.set_title(reshape_text(title0), fontproperties=font_prop, fontsize=14)
         
         # Subplot 1: Call
-        ax1.plot(df['تاریخ'], df['ارزش معاملات اختیار خرید'], label=reshape_text('اختیار خرید'), color='#158100', marker='.', linewidth=1.5)
-        ax1.set_title(reshape_text(f'نمودار ارزش معاملات اختیار خرید | آخرین مقدار: {df["ارزش معاملات اختیار خرید"].iloc[0]:,.0f} م.ت'), fontproperties=font_prop, fontsize=14, color='#158100')
+        last_val_call = to_persian_digits(f'{df["ارزش معاملات اختیار خرید"].iloc[0]:,.0f}')
+        title1 = f'نمودار ارزش معاملات اختیار خرید | آخرین مقدار ({last_date_option}): {last_val_call} میلیارد تومان'
+        ax1.plot(df['تاریخ'], df['ارزش معاملات اختیار خرید'], label=reshape_text('ارزش معاملات اختیار خرید'), color='#158100', marker='.', linewidth=1.5)
+        ax1.set_title(reshape_text(title1), fontproperties=font_prop, fontsize=14, color='#158100')
         
         # Subplot 2: Put
-        ax2.plot(df['تاریخ'], df['ارزش معاملات اختیار فروش'], label=reshape_text('اختیار فروش'), marker='.', color='#990000', linewidth=1.5)
-        ax2.set_title(reshape_text(f'نمودار ارزش معاملات اختیار فروش | آخرین مقدار: {df["ارزش معاملات اختیار فروش"].iloc[0]:,.0f} م.ت'), fontproperties=font_prop, fontsize=14, color='#990000')
+        last_val_put = to_persian_digits(f'{df["ارزش معاملات اختیار فروش"].iloc[0]:,.0f}')
+        title2 = f'نمودار ارزش معاملات اختیار فروش | آخرین مقدار ({last_date_option}): {last_val_put} میلیارد تومان'
+        ax2.plot(df['تاریخ'], df['ارزش معاملات اختیار فروش'], label=reshape_text('ارزش معاملات اختیار فروش'), marker='.', color='#990000', linewidth=1.5)
+        ax2.set_title(reshape_text(title2), fontproperties=font_prop, fontsize=14, color='#990000')
 
         for ax in [ax0, ax1, ax2]:
             ax.set_ylabel(reshape_text('میلیارد تومان'), fontproperties=font_prop, fontsize=12)
@@ -125,20 +133,26 @@ def generate_options_plots():
         filename1 = f'OPTIONS_overview_{NOW_FILE_STR}.png'
         plt.savefig(filename1, dpi=300)
         generated_files.append(filename1)
-        print(f"نمودار اول آپشن با نام '{filename1}' ذخیره شد.")
+        print(f"نمودار اول آپشن (نمای کلی) با نام '{filename1}' ذخیره شد.")
         plt.close(fig1)
 
-        # --- نمودار ۲: ارزش معاملات کل آپشن با میانگین‌ها (خواسته شما) ---
+        # --- نمودار ۲: ارزش معاملات کل آپشن با میانگین‌ها ---
         fig2, ax_ma_kol = plt.subplots(figsize=(14, 7.9))
         ax_ma_kol.plot(df['تاریخ'], df['ارزش معاملات کل'], label=reshape_text('ارزش معاملات کل'), color='grey', marker='.', linestyle='--', alpha=0.6)
-        ax_ma_kol.plot(df['تاریخ'], df['MA_5_kol'], label=reshape_text('میانگین 5 روز'), color='#ff7f0e', linewidth=2)
-        ax_ma_kol.plot(df['تاریخ'], df['MA_10_kol'], label=reshape_text('میانگین 10 روز'), color='#2ca02c', linewidth=2)
-        ax_ma_kol.plot(df['تاریخ'], df['MA_30_kol'], label=reshape_text('میانگین 30 روز'), color='#1f77b4', linewidth=2)
-        ax_ma_kol.set_title(reshape_text(f'ارزش کل معاملات اختیارها و میانگین‌های متحرک | بروزرسانی: {NOW_STR}'), fontproperties=font_prop, fontsize=16)
+        ax_ma_kol.plot(df['تاریخ'], df['MA_5_kol'], label=reshape_text('میانگین ۵ روز'), color='#ff7f0e', linewidth=2)
+        ax_ma_kol.plot(df['تاریخ'], df['MA_10_kol'], label=reshape_text('میانگین ۱۰ روز'), color='#2ca02c', linewidth=2)
+        ax_ma_kol.plot(df['تاریخ'], df['MA_30_kol'], label=reshape_text('میانگین ۳۰ روز'), color='#1f77b4', linewidth=2)
+        
+        last_total_value = to_persian_digits(f"{df['ارزش معاملات کل'].iloc[0]:,.0f}")
+        last_date = to_persian_digits(df['تاریخ'].iloc[0])
+        new_title = f'ارزش کل معاملات اختیار و میانگین‌ها | آخرین مقدار: {last_total_value} م.ت ({last_date})'
+        ax_ma_kol.set_title(reshape_text(new_title), fontproperties=font_prop, fontsize=16, color='#003366')
+        
         ax_ma_kol.set_ylabel(reshape_text('میلیارد تومان'), fontproperties=font_prop, fontsize=12)
         ax_ma_kol.legend(loc='upper left', prop=font_prop)
         ax_ma_kol.grid(True, linestyle='--', alpha=0.6)
         ax_ma_kol.yaxis.set_major_formatter(FuncFormatter(thousands_formatter))
+        for label in ax_ma_kol.get_yticklabels(): label.set_fontproperties(font_prop)
         ax_ma_kol.invert_xaxis()
         plt.xticks(ticks=df['تاریخ'][::2], rotation=60, ha='right', fontproperties=font_prop, fontsize=11)
         fig2.text(0.5, 0.01, reshape_text(channel_name), fontsize=14, va='bottom', ha='center', fontproperties=font_prop, color='#3399ff')
@@ -147,7 +161,7 @@ def generate_options_plots():
         filename2 = f'OPTIONS_total_ma_{NOW_FILE_STR}.png'
         plt.savefig(filename2, dpi=300)
         generated_files.append(filename2)
-        print(f"نمودار دوم آپشن با نام '{filename2}' ذخیره شد.")
+        print(f"نمودار دوم آپشن (میانگین متحرک) با نام '{filename2}' ذخیره شد.")
         plt.close(fig2)
 
         print("--- فرآیند نمودارهای آپشن با موفقیت تمام شد ---")
@@ -161,10 +175,6 @@ def generate_options_plots():
 # تابع ۲: تولید نمودار ارزش معاملات سهام خرد
 # ===============================================================
 def generate_stock_plot():
-    """
-    داده‌های ارزش معاملات سهام خرد را دریافت، نمودار را تولید و
-    نام فایل آن را برمی‌گرداند.
-    """
     print("\n--- شروع فرآیند تولید نمودار ارزش معاملات خرد ---")
     URL = 'https://tradersarena.ir/market/history?type=1'
     NOW = datetime.now()
@@ -173,7 +183,6 @@ def generate_stock_plot():
     channel_name = "کانال تلگرام : Data_Bors"
 
     try:
-        # --- دریافت و پردازش داده‌ها ---
         print(f"در حال دریافت داده از: {URL}")
         html = requests.get(URL, timeout=15)
         html.raise_for_status()
@@ -204,16 +213,18 @@ def generate_stock_plot():
         colors = {30: 'crimson', 10: 'royalblue', 5: 'orange'}
         ax.bar(df['تاریخ'], df['ارزش معاملات'], label=reshape_text('ارزش معاملات روزانه'), color='lightgrey', alpha=0.7)
         for period in ma_periods:
-            ax.plot(df['تاریخ'], df[f'MA_{period}'], label=reshape_text(f'میانگین {period} روزه'), color=colors[period], linewidth=2.5)
+            ax.plot(df['تاریخ'], df[f'MA_{period}'], label=reshape_text(f'میانگین {to_persian_digits(period)} روزه'), color=colors[period], linewidth=2.5)
 
-        last_value = df['ارزش معاملات'].iloc[-1]
-        last_date = df['تاریخ'].iloc[-1]
-        main_title = f'تحلیل ارزش معاملات خرد | آخرین مقدار: {last_value:,.0f} میلیارد تومان ({last_date}) | بروزرسانی: {NOW_STR_TITLE}'
+        last_value_persian = to_persian_digits(f"{df['ارزش معاملات'].iloc[-1]:,.0f}")
+        last_date_persian = to_persian_digits(df['تاریخ'].iloc[-1])
+        now_str_persian = to_persian_digits(NOW_STR_TITLE)
+        main_title = f'تحلیل ارزش معاملات خرد | آخرین مقدار: {last_value_persian} میلیارد تومان ({last_date_persian}) | بروزرسانی: {now_str_persian}'
         ax.set_title(reshape_text(main_title), fontproperties=font_prop, fontsize=18, color='#003366')
 
         ax.legend(loc='upper left', prop=font_prop, fontsize=12)
         ax.grid(True, linestyle='--', linewidth=0.5)
         ax.yaxis.set_major_formatter(FuncFormatter(thousands_formatter))
+        for label in ax.get_yticklabels(): label.set_fontproperties(font_prop)
         ax.set_ylabel(reshape_text('میلیارد تومان'), fontproperties=font_prop, fontsize=16)
         tick_spacing = math.ceil(len(df) / 20)
         ax.set_xticks(df['تاریخ'][::tick_spacing])
@@ -237,11 +248,9 @@ def generate_stock_plot():
 # تابع ۳: ارسال عکس به تلگرام
 # ===============================================================
 def send_photo_to_telegram(bot_token, chat_id, photo_path, caption=""):
-    """یک فایل عکس را به همراه کپشن به تلگرام ارسال می‌کند."""
     if not photo_path:
         print("خطا: مسیر عکسی برای ارسال وجود ندارد.")
         return
-
     url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
     print(f"در حال ارسال {photo_path} به تلگرام...")
     try:
@@ -255,42 +264,40 @@ def send_photo_to_telegram(bot_token, chat_id, photo_path, caption=""):
         print(f"یک خطای ناشناخته در هنگام ارسال به تلگرام رخ داد: {e}")
 
 # ===============================================================
-# بخش اصلی اجرای برنامه
+# بخش اصلی اجرای برنامه (با حذف خودکار فایل‌ها)
 # ===============================================================
 if __name__ == "__main__":
-    print("==============================================")
+    print("="*46)
     print("شروع اجرای اسکریپت ارسال گزارشات به تلگرام")
-    print("==============================================")
+    print("="*46)
 
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("خطای حیاتی: توکن ربات تلگرام یا شناسه چت تنظیم نشده است. برنامه متوقف می‌شود.")
     else:
-        # ۱. تولید و ارسال نمودارهای آپشن
         option_chart_files = generate_options_plots()
         if option_chart_files:
-            # ارسال اولین نمودار آپشن (نمای کلی)
-            send_photo_to_telegram(
-                bot_token=TELEGRAM_BOT_TOKEN, chat_id=TELEGRAM_CHAT_ID,
-                photo_path=option_chart_files[0], caption="📊 گزارش کلی ارزش معاملات بازار آپشن"
-            )
-            # ارسال دومین نمودار آپشن (ارزش کل با میانگین‌ها)
-            send_photo_to_telegram(
-                bot_token=TELEGRAM_BOT_TOKEN, chat_id=TELEGRAM_CHAT_ID,
-                photo_path=option_chart_files[1], caption="📈 تحلیل ارزش کل معاملات آپشن و میانگین‌های متحرک"
-            )
+            for i, chart_file in enumerate(option_chart_files):
+                captions = ["📊 گزارش کلی ارزش معاملات بازار آپشن", "📈 تحلیل ارزش کل معاملات آپشن و میانگین‌های متحرک"]
+                send_photo_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, chart_file, captions[i])
+                try:
+                    os.remove(chart_file)
+                    print(f"فایل موقت '{chart_file}' با موفقیت حذف شد.")
+                except OSError as e:
+                    print(f"خطا در حذف فایل '{chart_file}': {e}")
         else:
             print("هیچ نموداری برای بازار آپشن تولید نشد.")
 
-        # ۲. تولید و ارسال نمودار سهام خرد
         stock_chart_file = generate_stock_plot()
         if stock_chart_file:
-            send_photo_to_telegram(
-                bot_token=TELEGRAM_BOT_TOKEN, chat_id=TELEGRAM_CHAT_ID,
-                photo_path=stock_chart_file, caption="📉 تحلیل ارزش معاملات سهام خرد"
-            )
+            send_photo_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, stock_chart_file, "📉 تحلیل ارزش معاملات سهام خرد")
+            try:
+                os.remove(stock_chart_file)
+                print(f"فایل موقت '{stock_chart_file}' با موفقیت حذف شد.")
+            except OSError as e:
+                print(f"خطا در حذف فایل '{stock_chart_file}': {e}")
         else:
             print("نموداری برای ارزش معاملات خرد تولید نشد.")
 
-    print("\n==============================================")
+    print("\n" + "="*46)
     print("اجرای اسکریپت به پایان رسید.")
-    print("==============================================")
+    print("="*46)
