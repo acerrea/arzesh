@@ -65,7 +65,6 @@ def generate_options_plots():
             return []
 
         data = []
-        # <<< تغییر اصلی: دریافت ۲۵۰ ردیف داده >>>
         rows = table.find_all('tr')[2:252] 
         print(f"تعداد {len(rows)} ردیف داده برای آپشن دریافت شد.")
 
@@ -94,7 +93,7 @@ def generate_options_plots():
         df = pd.merge(df, df_reversed.iloc[::-1], on='تاریخ', how='left', suffixes=('', '_y'))
         df = df.loc[:,~df.columns.str.endswith('_y')]
 
-        # --- نمودار ۱: نمای کلی معاملات آپشن ---
+        # --- نمودار ۱: نمای کلی معاملات آپشن (سه‌قسمتی) ---
         fig1, (ax0, ax1, ax2) = plt.subplots(3, 1, figsize=(23, 12.5), sharex=True)
         fig1.suptitle(reshape_text(f"گزارش ارزش معاملات اختیار خرید و فروش | بروزرسانی: {to_persian_digits(NOW_STR)}"), fontsize=18, fontproperties=font_prop, y=0.98, color='#003366')
         
@@ -122,7 +121,6 @@ def generate_options_plots():
             for label in ax.get_yticklabels(): label.set_fontproperties(font_prop)
 
         ax0.invert_xaxis()
-        # <<< بهبود خوانایی محور تاریخ >>>
         tick_spacing = math.ceil(len(df) / 20)
         plt.xticks(ticks=df['تاریخ'][::tick_spacing], rotation=60, ha='right', fontproperties=font_prop, fontsize=11)
         
@@ -153,10 +151,7 @@ def generate_options_plots():
         ax_ma_kol.yaxis.set_major_formatter(FuncFormatter(thousands_formatter))
         for label in ax_ma_kol.get_yticklabels(): label.set_fontproperties(font_prop)
         ax_ma_kol.invert_xaxis()
-        
-        # <<< بهبود خوانایی محور تاریخ >>>
         plt.xticks(ticks=df['تاریخ'][::tick_spacing], rotation=60, ha='right', fontproperties=font_prop, fontsize=11)
-        
         fig2.text(0.5, 0.01, reshape_text(channel_name), fontsize=14, va='bottom', ha='center', fontproperties=font_prop, color='#3399ff')
         plt.subplots_adjust(left=0.06, right=0.97, bottom=0.18, top=0.92)
 
@@ -174,7 +169,7 @@ def generate_options_plots():
         return []
 
 # ===============================================================
-# تابع ۲: تولید نمودار ارزش معاملات سهام خرد (بدون تغییر)
+# تابع ۲: تولید نمودار ارزش معاملات سهام خرد
 # ===============================================================
 def generate_stock_plot():
     print("\n--- شروع فرآیند تولید نمودار ارزش معاملات خرد ---")
@@ -210,7 +205,6 @@ def generate_stock_plot():
         for period in ma_periods:
             df[f'MA_{period}'] = df['ارزش معاملات'].rolling(window=period).mean()
 
-        # --- رسم نمودار ---
         fig, ax = plt.subplots(figsize=(24, 10))
         colors = {30: 'crimson', 10: 'royalblue', 5: 'orange'}
         ax.bar(df['تاریخ'], df['ارزش معاملات'], label=reshape_text('ارزش معاملات روزانه'), color='lightgrey', alpha=0.7)
@@ -239,7 +233,6 @@ def generate_stock_plot():
         plt.close(fig)
         
         print(f"نمودار سهام خرد با نام '{filename}' ذخیره شد.")
-        print("--- فرآیند نمودار سهام خرد با موفقیت تمام شد ---")
         return filename
 
     except Exception as e:
@@ -266,7 +259,7 @@ def send_photo_to_telegram(bot_token, chat_id, photo_path, caption=""):
         print(f"یک خطای ناشناخته در هنگام ارسال به تلگرام رخ داد: {e}")
 
 # ===============================================================
-# بخش اصلی اجرای برنامه (با حذف خودکار فایل‌ها)
+# بخش اصلی اجرای برنامه (با هشتگ و حذف خودکار فایل‌ها)
 # ===============================================================
 if __name__ == "__main__":
     print("="*46)
@@ -276,11 +269,18 @@ if __name__ == "__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("خطای حیاتی: توکن ربات تلگرام یا شناسه چت تنظیم نشده است. برنامه متوقف می‌شود.")
     else:
+        # <<< تغییر: تعریف کپشن‌ها با هشتگ >>>
+        option_captions = [
+            "📊 گزارش کلی ارزش معاملات بازار آپشن\n\n#اختیار_معاملات #آپشن #گزارش_روزانه",
+            "📈 تحلیل ارزش کل معاملات آپشن و میانگین‌های متحرک\n\n#اختیار_معاملات #آپشن #تحلیل_تکنیکال #میانگین_متحرک"
+        ]
+        stock_caption = "📉 تحلیل ارزش معاملات سهام خرد\n\n#ارزش_معاملات_خرد #تحلیل_بازار #بورس"
+
+        # ۱. تولید و ارسال نمودارهای آپشن
         option_chart_files = generate_options_plots()
         if option_chart_files:
-            captions = ["📊 گزارش کلی ارزش معاملات بازار آپشن", "📈 تحلیل ارزش کل معاملات آپشن و میانگین‌های متحرک"]
             for i, chart_file in enumerate(option_chart_files):
-                send_photo_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, chart_file, captions[i])
+                send_photo_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, chart_file, option_captions[i])
                 try:
                     os.remove(chart_file)
                     print(f"فایل موقت '{chart_file}' با موفقیت حذف شد.")
@@ -289,9 +289,10 @@ if __name__ == "__main__":
         else:
             print("هیچ نموداری برای بازار آپشن تولید نشد.")
 
+        # ۲. تولید و ارسال نمودار سهام خرد
         stock_chart_file = generate_stock_plot()
         if stock_chart_file:
-            send_photo_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, stock_chart_file, "📉 تحلیل ارزش معاملات سهام خرد")
+            send_photo_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, stock_chart_file, stock_caption)
             try:
                 os.remove(stock_chart_file)
                 print(f"فایل موقت '{stock_chart_file}' با موفقیت حذف شد.")
