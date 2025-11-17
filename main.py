@@ -32,17 +32,13 @@ def reshape_text(text):
     reshaped_text = arabic_reshaper.reshape(text)
     return get_display(reshaped_text)
 
-# <<< تابع جدید برای تبدیل اعداد به فارسی >>>
 def to_persian_digits(text):
-    """رشته‌ای که حاوی اعداد انگلیسی است را به اعداد فارسی تبدیل می‌کند."""
     english_digits = "0123456789"
     persian_digits = "۰۱۲۳۴۵۶۷۸۹"
     translation_table = str.maketrans(english_digits, persian_digits)
     return str(text).translate(translation_table)
 
-# <<< اصلاح تابع فرمت‌دهی محورها برای استفاده از اعداد فارسی >>>
 def thousands_formatter(x, pos):
-    """اعداد را با جداکننده هزارگان فرمت کرده و به فارسی تبدیل می‌کند."""
     formatted_number = f'{int(x):,}'
     return to_persian_digits(formatted_number)
 
@@ -50,7 +46,7 @@ def thousands_formatter(x, pos):
 # تابع ۱: تولید نمودارهای بازار آپشن
 # ===============================================================
 def generate_options_plots():
-    print("\n--- شروع فرآیند تولید نمودارهای بازار آپشن ---")
+    print("\n--- شروع فرآیند تولید نمودارهای بازار آپشن (۲۵۰ روز) ---")
     URL = 'https://tradersarena.ir/options-arena/history'
     NOW = datetime.now()
     NOW_STR = NOW.strftime('%Y/%m/%d | %H:%M:%S')
@@ -69,7 +65,10 @@ def generate_options_plots():
             return []
 
         data = []
-        rows = table.find_all('tr')[2:102]
+        # <<< تغییر اصلی: دریافت ۲۵۰ ردیف داده >>>
+        rows = table.find_all('tr')[2:252] 
+        print(f"تعداد {len(rows)} ردیف داده برای آپشن دریافت شد.")
+
         for tr in rows:
             cols = tr.find_all('td')
             if len(cols) > 14:
@@ -100,19 +99,16 @@ def generate_options_plots():
         fig1.suptitle(reshape_text(f"گزارش ارزش معاملات اختیار خرید و فروش | بروزرسانی: {to_persian_digits(NOW_STR)}"), fontsize=18, fontproperties=font_prop, y=0.98, color='#003366')
         
         last_date_option = to_persian_digits(df["تاریخ"].iloc[0])
-        # Subplot 0: Total
         last_val_total = to_persian_digits(f'{df["ارزش معاملات کل"].iloc[0]:,.0f}')
         title0 = f'نمودار ارزش معاملات کل اختیارها | آخرین مقدار ({last_date_option}): {last_val_total} میلیارد تومان'
         ax0.plot(df['تاریخ'], df['ارزش معاملات کل'], label=reshape_text('ارزش معاملات کل'), color='#000000', marker='.', linewidth=1.5)
         ax0.set_title(reshape_text(title0), fontproperties=font_prop, fontsize=14)
         
-        # Subplot 1: Call
         last_val_call = to_persian_digits(f'{df["ارزش معاملات اختیار خرید"].iloc[0]:,.0f}')
         title1 = f'نمودار ارزش معاملات اختیار خرید | آخرین مقدار ({last_date_option}): {last_val_call} میلیارد تومان'
         ax1.plot(df['تاریخ'], df['ارزش معاملات اختیار خرید'], label=reshape_text('ارزش معاملات اختیار خرید'), color='#158100', marker='.', linewidth=1.5)
         ax1.set_title(reshape_text(title1), fontproperties=font_prop, fontsize=14, color='#158100')
         
-        # Subplot 2: Put
         last_val_put = to_persian_digits(f'{df["ارزش معاملات اختیار فروش"].iloc[0]:,.0f}')
         title2 = f'نمودار ارزش معاملات اختیار فروش | آخرین مقدار ({last_date_option}): {last_val_put} میلیارد تومان'
         ax2.plot(df['تاریخ'], df['ارزش معاملات اختیار فروش'], label=reshape_text('ارزش معاملات اختیار فروش'), marker='.', color='#990000', linewidth=1.5)
@@ -126,7 +122,10 @@ def generate_options_plots():
             for label in ax.get_yticklabels(): label.set_fontproperties(font_prop)
 
         ax0.invert_xaxis()
-        plt.xticks(ticks=df['تاریخ'][::2], rotation=60, ha='right', fontproperties=font_prop, fontsize=11)
+        # <<< بهبود خوانایی محور تاریخ >>>
+        tick_spacing = math.ceil(len(df) / 20)
+        plt.xticks(ticks=df['تاریخ'][::tick_spacing], rotation=60, ha='right', fontproperties=font_prop, fontsize=11)
+        
         fig1.text(0.5, 0.02, reshape_text(channel_name), fontsize=14, va='bottom', ha='center', fontproperties=font_prop, color='#3399ff')
         plt.subplots_adjust(left=0.06, right=0.97, bottom=0.15, top=0.92, hspace=0.35)
         
@@ -154,7 +153,10 @@ def generate_options_plots():
         ax_ma_kol.yaxis.set_major_formatter(FuncFormatter(thousands_formatter))
         for label in ax_ma_kol.get_yticklabels(): label.set_fontproperties(font_prop)
         ax_ma_kol.invert_xaxis()
-        plt.xticks(ticks=df['تاریخ'][::2], rotation=60, ha='right', fontproperties=font_prop, fontsize=11)
+        
+        # <<< بهبود خوانایی محور تاریخ >>>
+        plt.xticks(ticks=df['تاریخ'][::tick_spacing], rotation=60, ha='right', fontproperties=font_prop, fontsize=11)
+        
         fig2.text(0.5, 0.01, reshape_text(channel_name), fontsize=14, va='bottom', ha='center', fontproperties=font_prop, color='#3399ff')
         plt.subplots_adjust(left=0.06, right=0.97, bottom=0.18, top=0.92)
 
@@ -172,7 +174,7 @@ def generate_options_plots():
         return []
 
 # ===============================================================
-# تابع ۲: تولید نمودار ارزش معاملات سهام خرد
+# تابع ۲: تولید نمودار ارزش معاملات سهام خرد (بدون تغییر)
 # ===============================================================
 def generate_stock_plot():
     print("\n--- شروع فرآیند تولید نمودار ارزش معاملات خرد ---")
@@ -276,8 +278,8 @@ if __name__ == "__main__":
     else:
         option_chart_files = generate_options_plots()
         if option_chart_files:
+            captions = ["📊 گزارش کلی ارزش معاملات بازار آپشن", "📈 تحلیل ارزش کل معاملات آپشن و میانگین‌های متحرک"]
             for i, chart_file in enumerate(option_chart_files):
-                captions = ["📊 گزارش کلی ارزش معاملات بازار آپشن", "📈 تحلیل ارزش کل معاملات آپشن و میانگین‌های متحرک"]
                 send_photo_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, chart_file, captions[i])
                 try:
                     os.remove(chart_file)
