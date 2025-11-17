@@ -94,7 +94,9 @@ def generate_options_plots():
         df = df.loc[:,~df.columns.str.endswith('_y')]
 
         # --- نمودار ۱: نمای کلی معاملات آپشن (سه‌قسمتی) ---
-        fig1, (ax0, ax1, ax2) = plt.subplots(3, 1, figsize=(23, 12.5), sharex=True)
+        # <<< تغییر اصلی اینجا اعمال شده است >>>
+        fig1, (ax0, ax1, ax2) = plt.subplots(3, 1, figsize=(20, 11), sharex=True)
+        
         fig1.suptitle(reshape_text(f"گزارش ارزش معاملات اختیار خرید و فروش | بروزرسانی: {to_persian_digits(NOW_STR)}"), fontsize=18, fontproperties=font_prop, y=0.98, color='#003366')
         
         last_date_option = to_persian_digits(df["تاریخ"].iloc[0])
@@ -269,14 +271,12 @@ if __name__ == "__main__":
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("خطای حیاتی: توکن ربات تلگرام یا شناسه چت تنظیم نشده است. برنامه متوقف می‌شود.")
     else:
-        # <<< تغییر: تعریف کپشن‌ها با هشتگ >>>
         option_captions = [
             "📊 گزارش کلی ارزش معاملات بازار آپشن\n\n#اختیار_معاملات #آپشن #گزارش_روزانه",
             "📈 تحلیل ارزش کل معاملات آپشن و میانگین‌های متحرک\n\n#اختیار_معاملات #آپشن #تحلیل_تکنیکال #میانگین_متحرک"
         ]
         stock_caption = "📉 تحلیل ارزش معاملات سهام خرد\n\n#ارزش_معاملات_خرد #تحلیل_بازار #بورس"
 
-        # ۱. تولید و ارسال نمودارهای آپشن
         option_chart_files = generate_options_plots()
         if option_chart_files:
             for i, chart_file in enumerate(option_chart_files):
@@ -289,7 +289,6 @@ if __name__ == "__main__":
         else:
             print("هیچ نموداری برای بازار آپشن تولید نشد.")
 
-        # ۲. تولید و ارسال نمودار سهام خرد
         stock_chart_file = generate_stock_plot()
         if stock_chart_file:
             send_photo_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, stock_chart_file, stock_caption)
