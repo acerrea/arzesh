@@ -65,7 +65,7 @@ def generate_options_plots():
             return []
 
         data = []
-        rows = table.find_all('tr')[2:252] 
+        rows = table.find_all('tr')[2:182] 
         print(f"تعداد {len(rows)} ردیف داده برای آپشن دریافت شد.")
 
         for tr in rows:
@@ -192,7 +192,7 @@ def generate_stock_plot():
             return None
 
         data = []
-        trs = table.find_all('tr')[1:120]
+        trs = table.find_all('tr')[1:181]
         for tr in trs:
             tds = tr.find_all('td')
             if len(tds) > 3:
